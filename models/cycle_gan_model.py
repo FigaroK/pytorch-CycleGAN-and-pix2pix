@@ -3,6 +3,8 @@ import itertools
 from util.image_pool import ImagePool
 from .base_model import BaseModel
 from . import networks
+import network
+# from network import ResNetFc, followingExtractor
 
 
 class CycleGANModel(BaseModel):
@@ -37,6 +39,8 @@ class CycleGANModel(BaseModel):
         Dropout is not used in the original CycleGAN paper.
         """
         parser.set_defaults(no_dropout=True)  # default CycleGAN did not use dropout
+        parser.set_defaults(input_nc=1)  # grayscale
+        parser.set_defaults(output_nc=1)  # grayscale
         if is_train:
             parser.add_argument('--lambda_A', type=float, default=10.0, help='weight for cycle loss (A -> B -> A)')
             parser.add_argument('--lambda_B', type=float, default=10.0, help='weight for cycle loss (B -> A -> B)')
@@ -52,7 +56,8 @@ class CycleGANModel(BaseModel):
         """
         BaseModel.__init__(self, opt)
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
-        self.loss_names = ['D_A', 'G_A', 'cycle_A', 'idt_A', 'D_B', 'G_B', 'cycle_B', 'idt_B']
+        # self.loss_names = ['D_A', 'G_A', 'cycle_A', 'idt_A', 'D_B', 'G_B', 'cycle_B', 'idt_B']
+        self.loss_names = ['D_A', 'G_A', 'cycle_A', 'idt_A', 'D_B', 'G_B', 'cycle_B', 'idt_B', 'feature_A', 'perceptual_A', 'feature_B', 'perceptual_B']
         # specify the images you want to save/display. The training/test scripts will call <BaseModel.get_current_visuals>
         visual_names_A = ['real_A', 'fake_B', 'rec_A']
         visual_names_B = ['real_B', 'fake_A', 'rec_B']
@@ -66,15 +71,18 @@ class CycleGANModel(BaseModel):
             self.model_names = ['G_A', 'G_B', 'D_A', 'D_B']
         else:  # during test time, only load Gs
             self.model_names = ['G_A', 'G_B']
-
+    
         # define networks (both Generators and discriminators)
         # The naming is different from those used in the paper.
         # Code (vs. paper): G_A (G), G_B (F), D_A (D_Y), D_B (D_X)
-        self.netG_A = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm,
+        self.netG_A = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm,\
                                         not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
-        self.netG_B = networks.define_G(opt.output_nc, opt.input_nc, opt.ngf, opt.netG, opt.norm,
+        self.netG_B = networks.define_G(opt.output_nc, opt.input_nc, opt.ngf, opt.netG, opt.norm,\
                                         not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
-
+        if self.opt.lambda_perceptual > 0:
+            self.feature_extractor = torch.nn.DataParallel(torch.load(self.opt.path_extractor).to('0'), self.gpu_ids).eval()
+            self.following_net = torch.nn.DataParallel(torch.load(self.opt.path_following).to('0'), self.gpu_ids).eval()
+            self.set_requires_grad([self.feature_extractor, self.following_net], False)  # Ds require no gradients when optimizing Gs
         if self.isTrain:  # define discriminators
             self.netD_A = networks.define_D(opt.output_nc, opt.ndf, opt.netD,
                                             opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
@@ -107,6 +115,9 @@ class CycleGANModel(BaseModel):
         AtoB = self.opt.direction == 'AtoB'
         self.real_A = input['A' if AtoB else 'B'].to(self.device)
         self.real_B = input['B' if AtoB else 'A'].to(self.device)
+        if input.has_key('pose_A') and input.has_key('pose_B'):
+            self.pose_A = input['pose_A' if AtoB else 'pose_B'].to(self.device)
+            self.pose_B = input['pose_B' if AtoB else 'pose_A'].to(self.device)
         self.image_paths = input['A_paths' if AtoB else 'B_paths']
 
     def forward(self):
@@ -153,6 +164,8 @@ class CycleGANModel(BaseModel):
         lambda_idt = self.opt.lambda_identity
         lambda_A = self.opt.lambda_A
         lambda_B = self.opt.lambda_B
+        lambda_feature = self.opt.lambda_feature
+        lambda_perceptual = self.opt.lambda_perceptual
         # Identity loss
         if lambda_idt > 0:
             # G_A should be identity if real_B is fed: ||G_A(B) - B||
@@ -164,9 +177,31 @@ class CycleGANModel(BaseModel):
         else:
             self.loss_idt_A = 0
             self.loss_idt_B = 0
+            # feature loss
+        if lambda_feature > 0:
+            self.loss_feature_A = torch.nn.SmoothL1Loss()(self.real_A, self.fake_B) * lambda_feature * lambda_A
+            self.loss_feature_B = torch.nn.SmoothL1Loss()(self.real_B, self.fake_A) * lambda_feature * lambda_B
+        else:
+            self.loss_feature_A = 0
+            self.loss_feature_B = 0
+        # perceptual loss
+        if lambda_perceptual > 0:
+            self.real_A_gaze = self.feature_extractor(self.real_A, self.pose_A)
+            self.real_A_gaze = self.following_net(self.real_A_gaze)
+            self.fake_B_gaze = self.feature_extractor(self.fake_B, self.pose_A)
+            self.fake_B_gaze = self.following_net(self.fake_B_gaze)
+            self.real_B_gaze = self.feature_extractor(self.real_B, self.pose_B)
+            self.real_B_gaze = self.following_net(self.real_B_gaze)
+            self.fake_A_gaze = self.feature_extractor(self.fake_A, self.pose_B)
+            self.fake_A_gaze = self.following_net(self.fake_A_gaze)
+            self.loss_perceptual_A = torch.nn.SmoothL1Loss()(self.real_A_gaze, self.fake_B_gaze) * lambda_feature * lambda_A
+            self.loss_perceptual_B = torch.nn.SmoothL1Loss()(self.real_B_gaze, self.fake_A_gaze) * lambda_feature * lambda_B
+        else:
+            self.loss_perceptual_A = 0
+            self.loss_perceptual_B = 0
 
         # GAN loss D_A(G_A(A))
-        self.loss_G_A = self.criterionGAN(self.netD_A(self.fake_B), True)
+        self.loss_G_A = self.criterionGAN(self.netD_A(self.fake_B), True) # B为1， A为0
         # GAN loss D_B(G_B(B))
         self.loss_G_B = self.criterionGAN(self.netD_B(self.fake_A), True)
         # Forward cycle loss || G_B(G_A(A)) - A||
@@ -174,7 +209,8 @@ class CycleGANModel(BaseModel):
         # Backward cycle loss || G_A(G_B(B)) - B||
         self.loss_cycle_B = self.criterionCycle(self.rec_B, self.real_B) * lambda_B
         # combined loss and calculate gradients
-        self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B
+        self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B + self.loss_feature_A +self.loss_feature_B \
+                + self.loss_perceptual_A + self.loss_perceptual_B
         self.loss_G.backward()
 
     def optimize_parameters(self):
