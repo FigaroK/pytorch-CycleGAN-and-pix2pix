@@ -45,7 +45,7 @@ def eyediap_toGray(x):
     x = (x / 255 - 0.5) / 0.5
     return x[np.newaxis, :]
 
-class gazeDataset(BaseDataset):
+class gazesingleDataset(BaseDataset):
     """A template dataset class for you to implement custom datasets."""
     @staticmethod
     def modify_commandline_options(parser, is_train):
@@ -59,12 +59,11 @@ class gazeDataset(BaseDataset):
             the modified parser.
         """
         parser.add_argument('--lambda_feature', type=float, default=0.1, help='# of gen filters in the last conv layer')
-        parser.add_argument('--lambda_perceptual', type=float, default=20, help='# of gen filters in the last conv layer')
-        parser.add_argument('--path_A', type=str, default="/4Tdisk/fjl/dataset/Unity_dis_from_MPIIGaze_H5/P00_partial.h5", help='# of gen filters in the last conv layer')
-        parser.add_argument('--path_B', type=str, default="/4Tdisk/fjl/dataset/MPII_H5_all/P*.h5", help='# of gen filters in the last conv layer')
-        parser.add_argument('--flip_right', type=int, help='# of gen filters in the last conv layer')
-        parser.add_argument('--path_extractor', type=str, default="/4Tdisk/fjl/checkpoint/gaze/cross_single_eye/partial/resnet50_extractor_best.tar", help='# of gen filters in the last conv layer')
-        parser.add_argument('--path_following', type=str, default="/4Tdisk/fjl/checkpoint/gaze/cross_single_eye/partial/resnet50_following_best.tar", help='# of gen filters in the last conv layer')
+        parser.add_argument('--lambda_perceptual', type=float, default=0.1, help='# of gen filters in the last conv layer')
+        parser.add_argument('--path_B', type=str, default="/4Tdisk/fjl/dataset/Unity_dis_from_MPIIGaze_H5/P00_partial.h5", help='# of gen filters in the last conv layer')
+        parser.add_argument('--path_A', type=str, default="/4Tdisk/fjl/dataset/MPII_H5_single_evaluation/P*.h5", help='# of gen filters in the last conv layer')
+        parser.add_argument('--path_extractor', type=str, default="/4Tdisk/fjl/checkpoint/gaze/cross_single_eye/all/resnet50_extractor_best.tar", help='# of gen filters in the last conv layer')
+        parser.add_argument('--path_following', type=str, default="/4Tdisk/fjl/checkpoint/gaze/cross_single_eye/all/resnet50_following_best.tar", help='# of gen filters in the last conv layer')
         # parser.set_defaults(max_dataset_size=10, new_dataset_option=2.0)  # specify dataset-specific default values
         return parser
 
@@ -83,15 +82,11 @@ class gazeDataset(BaseDataset):
         BaseDataset.__init__(self, opt)
         # get the image paths of your dataset;
         self.image_paths_A = glob(opt.path_A)  # You can call sorted(make_dataset(self.root, opt.max_dataset_size)) to get all the image paths under the directory self.root
-        self.image_paths_B = glob(opt.path_B)  # You can call sorted(make_dataset(self.root, opt.max_dataset_size)) to get all the image paths under the directory self.root
         # define the default transform function. You can use <base_dataset.get_transform>; You can also define your custom transform function
         self.transform = eyediap_toGray
         self.A_files = [h5py.File(file_name, 'r') for file_name in self.image_paths_A]
-        self.B_files = [h5py.File(file_name, 'r') for file_name in self.image_paths_B]
-        self.A = _eyediap_get_mat(self.A_files, flip_right=bool(opt.flip_right))
-        self.B = _eyediap_get_mat(self.B_files)
+        self.A = _eyediap_get_mat(self.A_files)
         self.A_size = self.A[-1]
-        self.B_size = self.B[-1]
 
     def __getitem__(self, index):
         """Return a data point and its metadata information.
@@ -111,16 +106,11 @@ class gazeDataset(BaseDataset):
         data_A = self.transform(data_A)
         data_A_label = self.A[2][index].astype(np.float32)
         data_A_pose = self.A[4][index].astype(np.float32)
-        index_B = random.randint(0, self.B_size - 1)
-        data_B = self.B[0][index_B].astype(np.float32)
-        data_B = self.transform(data_B)
-        data_B_label = self.B[2][index_B].astype(np.float32)
-        data_B_pose = self.B[4][index_B].astype(np.float32)
-        return {'A': data_A, 'label_A':data_A_label, 'pose_A':data_A_pose, 'A_paths':f"{index}.png", 'B': data_B, 'label_B':data_B_label, 'pose_B':data_B_pose, "B_paths":f"{index}_B.png"}
+        return {'A': data_A, 'label_A':data_A_label, 'pose_A':data_A_pose, 'A_paths':f"{index}.png"}
 
     def __len__(self):
         """Return the total number of images."""
-        a = max(self.A_size, self.B_size)
+        a = self.A_size
         return a
 
 def _eyediap_get_mat(files, single=True, flip_right=False):
@@ -137,7 +127,6 @@ def _eyediap_get_mat(files, single=True, flip_right=False):
 
     if single:
         # logger.debug("shape of 'images' is %s" % (images_l.shape,))
-        # print("shape of 'images' is %s" % (images_l.shape,))
         if 'right_gaze' in files[0] and flip_right:
             num_instances *= 2
             # logger.debug("%d images loaded" % (num_instances))
@@ -146,10 +135,10 @@ def _eyediap_get_mat(files, single=True, flip_right=False):
             images_l = np.vstack([torch2cv2(images_l), torch2cv2(np.flip(images_r, 2 if images_r.ndim == 4 and images_r.shape[-1] == 3 else -1))]) 
             left_gazes= np.vstack([left_gazes, right_gazes])
             left_headposes= np.vstack([left_headposes, right_headposes])
-        print("%d images loaded" % (num_instances))
+        else:
+            pass
         return images_l, None, left_gazes, None, left_headposes, None, num_instances
 
     # logger.debug("%s images loaded" % (num_instances))
     # logger.debug("shape of 'images' is %s" % (images_l.shape,))
-    print("%d images loaded" % (num_instances))
     return images_l, images_r, left_gazes, right_gazes, left_headposes, right_headposes, num_instances

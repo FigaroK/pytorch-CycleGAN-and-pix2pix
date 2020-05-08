@@ -44,7 +44,7 @@ class CycleGANModel(BaseModel):
         if is_train:
             parser.add_argument('--lambda_A', type=float, default=10.0, help='weight for cycle loss (A -> B -> A)')
             parser.add_argument('--lambda_B', type=float, default=10.0, help='weight for cycle loss (B -> A -> B)')
-            parser.add_argument('--lambda_identity', type=float, default=0.5, help='use identity mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
+            parser.add_argument('--lambda_identity', type=float, default=0, help='use identity mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
 
         return parser
 
@@ -57,7 +57,7 @@ class CycleGANModel(BaseModel):
         BaseModel.__init__(self, opt)
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
         # self.loss_names = ['D_A', 'G_A', 'cycle_A', 'idt_A', 'D_B', 'G_B', 'cycle_B', 'idt_B']
-        self.loss_names = ['D_A', 'G_A', 'cycle_A', 'idt_A', 'D_B', 'G_B', 'cycle_B', 'idt_B', 'feature_A', 'perceptual_A', 'feature_B', 'perceptual_B']
+        self.loss_names = ['D_A', 'G_A', 'cycle_A', 'feature_A', 'perceptual_A', 'D_B', 'G_B', 'cycle_B', 'feature_B', 'perceptual_B']
         # specify the images you want to save/display. The training/test scripts will call <BaseModel.get_current_visuals>
         visual_names_A = ['real_A', 'fake_B', 'rec_A']
         visual_names_B = ['real_B', 'fake_A', 'rec_B']
@@ -79,9 +79,9 @@ class CycleGANModel(BaseModel):
                                         not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
         self.netG_B = networks.define_G(opt.output_nc, opt.input_nc, opt.ngf, opt.netG, opt.norm,\
                                         not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
-        if self.opt.lambda_perceptual > 0:
-            self.feature_extractor = torch.nn.DataParallel(torch.load(self.opt.path_extractor).to('0'), self.gpu_ids).eval()
-            self.following_net = torch.nn.DataParallel(torch.load(self.opt.path_following).to('0'), self.gpu_ids).eval()
+        if self.opt.lambda_perceptual > 0 and self.isTrain:
+            self.feature_extractor = torch.nn.DataParallel(torch.load(self.opt.path_extractor, map_location=torch.device(f'cuda:{int(opt.gpu_ids[0])}')), self.gpu_ids).eval()
+            self.following_net = torch.nn.DataParallel(torch.load(self.opt.path_following, map_location=torch.device(f'cuda:{int(opt.gpu_ids[0])}')), self.gpu_ids).eval()
             self.set_requires_grad([self.feature_extractor, self.following_net], False)  # Ds require no gradients when optimizing Gs
         if self.isTrain:  # define discriminators
             self.netD_A = networks.define_D(opt.output_nc, opt.ndf, opt.netD,
@@ -115,9 +115,12 @@ class CycleGANModel(BaseModel):
         AtoB = self.opt.direction == 'AtoB'
         self.real_A = input['A' if AtoB else 'B'].to(self.device)
         self.real_B = input['B' if AtoB else 'A'].to(self.device)
-        if input.has_key('pose_A') and input.has_key('pose_B'):
+        if 'pose_A' in input and 'pose_B' in input:
             self.pose_A = input['pose_A' if AtoB else 'pose_B'].to(self.device)
             self.pose_B = input['pose_B' if AtoB else 'pose_A'].to(self.device)
+        if 'label_A' in input and 'label_B' in input:
+            self.pose_A = input['label_A' if AtoB else 'label_B'].to(self.device)
+            self.pose_B = input['label_B' if AtoB else 'label_A'].to(self.device)
         self.image_paths = input['A_paths' if AtoB else 'B_paths']
 
     def forward(self):
@@ -194,8 +197,8 @@ class CycleGANModel(BaseModel):
             self.real_B_gaze = self.following_net(self.real_B_gaze)
             self.fake_A_gaze = self.feature_extractor(self.fake_A, self.pose_B)
             self.fake_A_gaze = self.following_net(self.fake_A_gaze)
-            self.loss_perceptual_A = torch.nn.SmoothL1Loss()(self.real_A_gaze, self.fake_B_gaze) * lambda_feature * lambda_A
-            self.loss_perceptual_B = torch.nn.SmoothL1Loss()(self.real_B_gaze, self.fake_A_gaze) * lambda_feature * lambda_B
+            self.loss_perceptual_A = torch.nn.SmoothL1Loss()(self.real_A_gaze, self.fake_B_gaze) * lambda_perceptual * lambda_A
+            self.loss_perceptual_B = torch.nn.SmoothL1Loss()(self.real_B_gaze, self.fake_A_gaze) * lambda_perceptual * lambda_B
         else:
             self.loss_perceptual_A = 0
             self.loss_perceptual_B = 0

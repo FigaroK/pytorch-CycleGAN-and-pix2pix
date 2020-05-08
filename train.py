@@ -20,11 +20,13 @@ See frequently asked questions at: https://github.com/junyanz/pytorch-CycleGAN-a
 """
 import sys
 sys.path.append("/4Tdisk/fjl/Proj/pytorch-CycleGAN-and-pix2pix/models")
+import os
 import time
 from options.train_options import TrainOptions
 from data import create_dataset
 from models import create_model
 from util.visualizer import Visualizer
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 if __name__ == '__main__':
     opt = TrainOptions().parse()   # get training options

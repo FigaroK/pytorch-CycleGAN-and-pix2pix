@@ -27,11 +27,15 @@ See training and test tips at: https://github.com/junyanz/pytorch-CycleGAN-and-p
 See frequently asked questions at: https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix/blob/master/docs/qa.md
 """
 import os
+import sys
+sys.path.append("/4Tdisk/fjl/Proj/pytorch-CycleGAN-and-pix2pix/models/")
 from options.test_options import TestOptions
 from data import create_dataset
 from models import create_model
 from util.visualizer import save_images
 from util import html
+import numpy as np
+import h5py
 
 
 if __name__ == '__main__':
@@ -50,20 +54,38 @@ if __name__ == '__main__':
     if opt.load_iter > 0:  # load_iter is 0 by default
         web_dir = '{:s}_iter{:d}'.format(web_dir, opt.load_iter)
     print('creating web directory', web_dir)
-    webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.epoch))
+    # webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.epoch))
     # test with eval mode. This only affects layers like batchnorm and dropout.
     # For [pix2pix]: we use batchnorm and dropout in the original pix2pix. You can experiment it with and without eval() mode.
     # For [CycleGAN]: It should not affect CycleGAN as CycleGAN uses instancenorm without dropout.
     if opt.eval:
         model.eval()
+    imgs = []
+    gazes = []
+    poses = []
     for i, data in enumerate(dataset):
-        if i >= opt.num_test:  # only apply our model to opt.num_test images.
-            break
+        # if i >= opt.num_test:  # only apply our model to opt.num_test images.
+        #     break
         model.set_input(data)  # unpack data from data loader
         model.test()           # run inference
         visuals = model.get_current_visuals()  # get image results
+        # img_path = f'{i:05}.png' # model.get_image_paths()     # get image paths
         img_path = model.get_image_paths()     # get image paths
+        target_dict = model.img_label_pose()
+        img = ((target_dict['img'].cpu().numpy() * 0.5 + 0.5) * 255).squeeze(1).astype(np.uint8)
+        imgs.append(img)
+        label = target_dict['label'].cpu().numpy()
+        gazes.append(label)
+        pose = target_dict['pose'].cpu().numpy()
+        poses.append(pose)
         if i % 5 == 0:  # save images to an HTML file
             print('processing (%04d)-th image... %s' % (i, img_path))
-        save_images(webpage, visuals, img_path, aspect_ratio=opt.aspect_ratio, width=opt.display_winsize)
-    webpage.save()  # save the HTML
+        # save_images(webpage, visuals, img_path, aspect_ratio=opt.aspect_ratio, width=opt.display_winsize)
+    imgs = np.vstack(imgs)
+    gazes = np.vstack(gazes)
+    poses = np.vstack(poses)
+    with h5py.File(f"./h5/{opt.model_suffix}_feature{opt.lambda_feature}_per{opt.lambda_perceptual}_{opt.epoch}.h5", 'w') as f:
+        f['left_eye_img'] = imgs
+        f['left_gaze'] = gazes
+        f['left_headpose'] = poses
+    # webpage.save()  # save the HTML

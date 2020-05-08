@@ -1,7 +1,6 @@
 from .base_model import BaseModel
 from . import networks
 
-
 class TestModel(BaseModel):
     """ This TesteModel can be used to generate CycleGAN results for only one direction.
     This model will automatically set '--dataset_mode single', which only loads the images from one collection.
@@ -23,8 +22,9 @@ class TestModel(BaseModel):
         You need to specify the network using the option '--model_suffix'.
         """
         assert not is_train, 'TestModel cannot be used during training time'
-        parser.set_defaults(dataset_mode='single')
-        parser.add_argument('--model_suffix', type=str, default='', help='In checkpoints_dir, [epoch]_net_G[model_suffix].pth will be loaded as the generator.')
+        # parser.set_defaults(dataset_mode='single')
+        parser.set_defaults(dataset_mode='gazesingle')
+        parser.add_argument('--model_suffix', type=str, help='In checkpoints_dir, [epoch]_net_G[model_suffix].pth will be loaded as the generator.')
 
         return parser
 
@@ -59,10 +59,15 @@ class TestModel(BaseModel):
         """
         self.real = input['A'].to(self.device)
         self.image_paths = input['A_paths']
+        self.pose = input['pose_A']
+        self.label = input['label_A']
 
     def forward(self):
         """Run forward pass."""
         self.fake = self.netG(self.real)  # G(real)
+
+    def img_label_pose(self):
+        return {'img': self.fake, 'label': self.label, 'pose': self.pose}
 
     def optimize_parameters(self):
         """No optimization for test model."""
