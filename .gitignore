@@ -2,6 +2,7 @@
 debug*
 datasets/
 h5/
+temp/
 checkpoints/
 results/
 build/

@@ -67,7 +67,7 @@ class TestModel(BaseModel):
         self.fake = self.netG(self.real)  # G(real)
 
     def img_label_pose(self):
-        return {'img': self.fake, 'label': self.label, 'pose': self.pose}
+        return {'img': torch.clamp(self.fake, -1, 1), 'label': self.label, 'pose': self.pose}
 
     def optimize_parameters(self):
         """No optimization for test model."""

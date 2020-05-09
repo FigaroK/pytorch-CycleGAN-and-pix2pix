@@ -44,7 +44,7 @@ class CycleGANModel(BaseModel):
         if is_train:
             parser.add_argument('--lambda_A', type=float, default=10.0, help='weight for cycle loss (A -> B -> A)')
             parser.add_argument('--lambda_B', type=float, default=10.0, help='weight for cycle loss (B -> A -> B)')
-            parser.add_argument('--lambda_identity', type=float, default=0, help='use identity mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
+            parser.add_argument('--lambda_identity', type=float, default=0.1, help='use identity mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
 
         return parser
 
@@ -197,8 +197,8 @@ class CycleGANModel(BaseModel):
             self.real_B_gaze = self.following_net(self.real_B_gaze)
             self.fake_A_gaze = self.feature_extractor(self.fake_A, self.pose_B)
             self.fake_A_gaze = self.following_net(self.fake_A_gaze)
-            self.loss_perceptual_A = torch.nn.SmoothL1Loss()(self.real_A_gaze, self.fake_B_gaze) * lambda_perceptual * lambda_A
-            self.loss_perceptual_B = torch.nn.SmoothL1Loss()(self.real_B_gaze, self.fake_A_gaze) * lambda_perceptual * lambda_B
+            self.loss_perceptual_A = torch.nn.L1Loss()(self.real_A_gaze, self.fake_B_gaze) * lambda_perceptual * lambda_A
+            self.loss_perceptual_B = torch.nn.L1Loss()(self.real_B_gaze, self.fake_A_gaze) * lambda_perceptual * lambda_B
         else:
             self.loss_perceptual_A = 0
             self.loss_perceptual_B = 0

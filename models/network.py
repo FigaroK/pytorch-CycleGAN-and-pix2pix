@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torchvision
 from torchvision import models
-# from torch.autograd import Variable
+from torch.autograd import Variable
 
 class AdversarialLayer(torch.autograd.Function):
     iter_num = 0

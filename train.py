@@ -19,7 +19,7 @@ See training and test tips at: https://github.com/junyanz/pytorch-CycleGAN-and-p
 See frequently asked questions at: https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix/blob/master/docs/qa.md
 """
 import sys
-sys.path.append("/4Tdisk/fjl/Proj/pytorch-CycleGAN-and-pix2pix/models")
+sys.path.append("/disks/disk2/fjl/Proj/Python_Proj/pytorch-CycleGAN-and-pix2pix/models")
 import os
 import time
 from options.train_options import TrainOptions

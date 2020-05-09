@@ -15,6 +15,7 @@ def tensor2im(input_image, imtype=np.uint8):
     """
     if not isinstance(input_image, np.ndarray):
         if isinstance(input_image, torch.Tensor):  # get the data from a variable
+            input_image = torch.clamp(input_image, -1, 1)
             image_tensor = input_image.data
         else:
             return input_image

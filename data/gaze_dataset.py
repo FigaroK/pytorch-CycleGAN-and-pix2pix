@@ -58,13 +58,13 @@ class gazeDataset(BaseDataset):
         Returns:
             the modified parser.
         """
-        parser.add_argument('--lambda_feature', type=float, default=0.1, help='# of gen filters in the last conv layer')
-        parser.add_argument('--lambda_perceptual', type=float, default=20, help='# of gen filters in the last conv layer')
-        parser.add_argument('--path_A', type=str, default="/4Tdisk/fjl/dataset/Unity_dis_from_MPIIGaze_H5/P00_partial.h5", help='# of gen filters in the last conv layer')
-        parser.add_argument('--path_B', type=str, default="/4Tdisk/fjl/dataset/MPII_H5_all/P*.h5", help='# of gen filters in the last conv layer')
+        parser.add_argument('--lambda_feature', type=float, default=0, help='# of gen filters in the last conv layer')
+        parser.add_argument('--lambda_perceptual', type=float, default=1, help='# of gen filters in the last conv layer')
+        parser.add_argument('--path_A', type=str, default="/disks/disk2/fjl/dataset/Unity_dis_from_MPIIGaze_H5/P00_partial.h5", help='# of gen filters in the last conv layer')
+        parser.add_argument('--path_B', type=str, default="/disks/disk2/fjl/dataset/MPII_H5_all/P*.h5", help='# of gen filters in the last conv layer')
         parser.add_argument('--flip_right', type=int, help='# of gen filters in the last conv layer')
-        parser.add_argument('--path_extractor', type=str, default="/4Tdisk/fjl/checkpoint/gaze/cross_single_eye/partial/resnet50_extractor_best.tar", help='# of gen filters in the last conv layer')
-        parser.add_argument('--path_following', type=str, default="/4Tdisk/fjl/checkpoint/gaze/cross_single_eye/partial/resnet50_following_best.tar", help='# of gen filters in the last conv layer')
+        parser.add_argument('--path_extractor', type=str, default="/disks/disk2/fjl/checkpoint/gaze/cross_single_eye/partial/resnet50_extractor_best.tar", help='# of gen filters in the last conv layer')
+        parser.add_argument('--path_following', type=str, default="/disks/disk2/fjl/checkpoint/gaze/cross_single_eye/partial/resnet50_following_best.tar", help='# of gen filters in the last conv layer')
         # parser.set_defaults(max_dataset_size=10, new_dataset_option=2.0)  # specify dataset-specific default values
         return parser
 
